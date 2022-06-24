@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+import time
+import subprocess
+from pypresence import Presence
+
+class RPC:
+	def __init__(self, client_id):
+		self.rpc = Presence(client_id)
+
+		self.status = "paused"
+		self.elapsed_time = 0
+
+	def start(self):
+		while True:
+			try:
+				subprocess.check_output(["pgrep", "cmus"])
+				break
+			except:
+				print("[ERROR] No cmus server found. Exit.")
+				time.sleep(1)
+		try:
+			self.rpc.connect()
+			#print("[OK] RPC started.")
+
+			while True:
+				time.sleep(1)
+				ret = self.get_status()
+				if not self.status == "playing":
+					self.rpc.clear()
+					continue
+
+				#print(ret)
+				self.rpc.update(
+					large_image="captivate",
+					small_image="play-black",# if ret["status"] == "playing" else "pause-black",
+					details="%s - %s"%(ret["title"], ret["artist"]),
+					state="[ %s ]"%ret["album"],
+					start=time.time()-self.elapsed_time
+				)
+		except:
+			pass
+		finally:
+			self.rpc.close()
+			#print("[OK] RPC closed.")
+		#	icons source:
+		#	https://www.flaticon.com/free-icon/pause_709691
+		#	https://www.flaticon.com/free-icon/play-button_109197
+
+	def get_status(self):
+		ret = {}
+		for line in subprocess.check_output(["cmus-remote", "-C", "status"]).decode("utf-8").split("\n"):
+			params = line.split()
+			if params == []:
+				continue
+
+			if params[0] == "status":
+				self.status = params[1]
+			if params[0] == "position":
+				self.elapsed_time = int(params[1])
+			if params[0] == "tag":
+				ret[params[1]] = " ".join(params[2:])
+		return ret
+
+if __name__ == "__main__":
+	RPC("989349655831785523").start()
+
