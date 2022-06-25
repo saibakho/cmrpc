@@ -4,12 +4,13 @@ import time
 import subprocess
 from pypresence import Presence
 
+import os
+
 class RPC:
 	def __init__(self, client_id):
 		self.rpc = Presence(client_id)
-
-		self.status = "paused"
 		self.elapsed_time = 0
+		self.playing = False
 
 	def start(self):
 		while True:
@@ -21,28 +22,46 @@ class RPC:
 				time.sleep(1)
 		try:
 			self.rpc.connect()
-			#print("[OK] RPC started.")
+			print("[OK] RPC started.")
+
+			cur_song = ""
 
 			while True:
 				time.sleep(1)
-				ret = self.get_status()
-				if not self.status == "playing":
+				status = self.get_status()
+				if not self.playing:
 					self.rpc.clear()
+					cur_song = ""
 					continue
+				if cur_song != status["title"]:
+					cur_song = status["title"]
+					# extract cover from mp3
 
-				#print(ret)
-				self.rpc.update(
-					large_image="captivate",
-					small_image="play-black",# if ret["status"] == "playing" else "pause-black",
-					details="%s - %s"%(ret["title"], ret["artist"]),
-					state="[ %s ]"%ret["album"],
-					start=time.time()-self.elapsed_time
-				)
+					cover_dir = os.path.expanduser("~/.config/cmus/covers")
+					cover_path = "%s/%s.jpg"%(cover_dir, hash(status["album"].replace(" ", "")))
+					filename = status["file"].replace("'", "'\\''")
+ 
+					if not os.path.exists(cover_path):
+						if len(os.listdir(cover_dir)) > 10:
+							os.system("rm -rf %s"%cover_dir)
+						os.system("mkdir -p %s"%cover_dir)
+						#subprocess.run[("ffmpeg", "-i", "'%s'"%status["file"], "-an", "-vcodec", "copy", "temp.jpg")]
+						os.system("ffmpeg -i '%s' -an -vcodec copy %s 2>/dev/null"%(filename, cover_path))
+					self.notify(status, cover_path)
+
+					print(status)
+					self.rpc.update(
+						large_image="captivate",
+						small_image="play-black",# if status["status"] == "playing" else "pause-black",
+						details="%s"%status["title"],
+						state="%s"%status["artist"],
+						start=time.time()-self.elapsed_time
+					)
 		except:
 			pass
 		finally:
 			self.rpc.close()
-			#print("[OK] RPC closed.")
+			print("[OK] RPC closed.")
 		#	icons source:
 		#	https://www.flaticon.com/free-icon/pause_709691
 		#	https://www.flaticon.com/free-icon/play-button_109197
@@ -55,12 +74,24 @@ class RPC:
 				continue
 
 			if params[0] == "status":
-				self.status = params[1]
+				self.playing = params[1] == "playing"
+			if params[0] == "file":
+				ret["file"] = " ".join(params[1:])
+			if params[0] == "duration":
+				ret["length"] = int(params[1])
 			if params[0] == "position":
 				self.elapsed_time = int(params[1])
 			if params[0] == "tag":
 				ret[params[1]] = " ".join(params[2:])
 		return ret
+
+	def notify(self, status, cover_path):
+		num = status["length"]
+		if not os.path.exists(cover_path):
+			cover_path = "$PWD/assets/captivate.jpg"	# $PWD is not a good practice
+		os.system("notify-send -i %s 'Title : %s\nArtist : %s\nAlbum : %s\nLength : %s'"%
+			(cover_path, status["title"], status["artist"], status["album"],
+			"%s%02d : %02d"%("%02d : "%(num/3600) if num > 3600 else "", (num/60)%60, num%60)))
 
 if __name__ == "__main__":
 	RPC("989349655831785523").start()
