@@ -23,8 +23,8 @@
 ### Usage
 
 - Requirements
-	- ffmpeg
-	- python3 with below packages
+	- `ffmpeg`
+	- `python 3.10` (match-case used) with below packages
 	```bash
 		pip install pypresence
 		pip install musicbrainzngs

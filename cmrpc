@@ -62,6 +62,7 @@ class RPC:
 						large_image=cover_url,
 						small_image="play-black",# if status["status"] == "playing" else "pause-black",
 						large_text=status["album"],
+						small_text=status["length"],
 						details="%s"%status["title"],
 						state="%s"%status["artist"],
 						start=time.time()-self.elapsed_time
@@ -82,25 +83,26 @@ class RPC:
 			if params == []:
 				continue
 
-			if params[0] == "status":
-				self.playing = params[1] == "playing"
-			if params[0] == "file":
-				ret["file"] = " ".join(params[1:])
-			if params[0] == "duration":
-				ret["length"] = int(params[1])
-			if params[0] == "position":
-				self.elapsed_time = int(params[1])
-			if params[0] == "tag":
-				ret[params[1]] = " ".join(params[2:])
+			match params[0]:
+				case "status":
+					self.playing = params[1] == "playing"
+				case "file":
+					ret["file"] = " ".join(params[1:])
+				case "duration":
+					num = int(params[1])
+					ret["length"] = "%s%02d : %02d"%("%02d : "%(
+						num/3600) if num > 3600 else "", (num/60)%60, num%60)
+				case "position":
+					self.elapsed_time = int(params[1])
+				case "tag":
+					ret[params[1]] = " ".join(params[2:])
 		return ret
 
 	def notify(self, status, cover_path):
-		num = status["length"]
 		if not os.path.exists(cover_path):
 			cover_path = "$PWD/assets/captivate.jpg"	# $PWD is not a good practice
 		os.system("notify-send -i %s 'Title : %s\nArtist : %s\nAlbum : %s\nLength : %s'"%
-			(cover_path, status["title"], status["artist"], status["album"],
-			"%s%02d : %02d"%("%02d : "%(num/3600) if num > 3600 else "", (num/60)%60, num%60)))
+			(cover_path, status["title"], status["artist"], status["album"], status["length"]))
 
 	def fetch_cover_url(self, status):
 		query = "https://musicbrainz.org/ws/2/release/?query=artist:%s&release:%s&limit=1"%(status["albumartist"], status["album"])
