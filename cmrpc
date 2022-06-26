@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 
+import os
 import time
 import subprocess
+import musicbrainzngs
 from pypresence import Presence
-
-import os
 
 class RPC:
 	def __init__(self, client_id):
 		self.rpc = Presence(client_id)
 		self.elapsed_time = 0
 		self.playing = False
+		musicbrainzngs.set_useragent("cmrpc", "0.1", "https://gitlab.com/saibakho/cmrpc")
 
 	def start(self):
 		while True:
@@ -21,10 +22,9 @@ class RPC:
 				print("[ERROR] No cmus server found. Exit.")
 				time.sleep(1)
 		try:
+			cur_song = ""
 			self.rpc.connect()
 			print("[OK] RPC started.")
-
-			cur_song = ""
 
 			while True:
 				time.sleep(1)
@@ -49,10 +49,19 @@ class RPC:
 						os.system("ffmpeg -i '%s' -an -vcodec copy %s 2>/dev/null"%(filename, cover_path))
 					self.notify(status, cover_path)
 
+					# fetch cover url from MusicBrainz
+					try:
+						result = musicbrainzngs.search_releases(query=status["album"], artist=status["albumartist"])
+						cover_url = "https://coverartarchive.org/release-group/%s/front"%result["release-list"][0]["release-group"]["id"]
+					except:
+						print("[ERROR] Fetch cover from MusicBrainz failed.")
+						cover_url = "captivate"
+					
 					print(status)
 					self.rpc.update(
-						large_image="captivate",
+						large_image=cover_url,
 						small_image="play-black",# if status["status"] == "playing" else "pause-black",
+						large_text=status["album"],
 						details="%s"%status["title"],
 						state="%s"%status["artist"],
 						start=time.time()-self.elapsed_time
@@ -93,6 +102,21 @@ class RPC:
 			(cover_path, status["title"], status["artist"], status["album"],
 			"%s%02d : %02d"%("%02d : "%(num/3600) if num > 3600 else "", (num/60)%60, num%60)))
 
+	def fetch_cover_url(self, status):
+		query = "https://musicbrainz.org/ws/2/release/?query=artist:%s&release:%s&limit=1"%(status["albumartist"], status["album"])
+		# parse
+		return "https://coverartarchive.org/release-group/%s/front"%group_id
+
 if __name__ == "__main__":
 	RPC("989349655831785523").start()
+	#result = musicbrainzngs.search_releases(query="μοναξιά", artist="nomico")
+	#for item in result["release-list"]:
+	#	print(item["artist-credit"][0]["name"])
 
+	# ==> todos:
+	# 1. jp2a visualizer
+	# 2. button jump to MusicBrain album page
+
+	# ==> fixes
+	# 1. better search (filter with artist, track num, released year, etc)
+	# 2. replace ffmpeg with musicbrainzngs
