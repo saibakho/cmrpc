@@ -1,17 +1,23 @@
 #!/usr/bin/env python
 
-import os
-import time
-import subprocess
-import musicbrainzngs
+import os, sys, time, subprocess
 from pypresence import Presence
 
 class RPC:
-	def __init__(self, client_id):
-		self.rpc = Presence(client_id)
+	def __init__(self, rpc_id, imgur_id):
+		self.rpc = Presence(rpc_id)
 		self.elapsed_time = 0
 		self.playing = False
-		musicbrainzngs.set_useragent("cmrpc", "0.1", "https://gitlab.com/saibakho/cmrpc")
+
+		# imgur url
+		self.imgur = None
+		if imgur_id != "":
+			import pyimgur
+			self.imgur = pyimgur.Imgur(imgur_id)
+		else:
+			import musicbrainzngs
+			musicbrainzngs.set_useragent("cmrpc", "0.1", "https://gitlab.com/saibakho/cmrpc")
+		self.saved_imgs = {}
 
 	def start(self):
 		while True:
@@ -35,31 +41,13 @@ class RPC:
 					continue
 				if cur_song != status["title"]:
 					cur_song = status["title"]
-					# extract cover from mp3
 
-					cover_dir = os.path.expanduser("~/.config/cmus/covers")
-					cover_path = "%s/%s.jpg"%(cover_dir, hash(status["album"].replace(" ", "")))
-					filename = status["file"].replace("'", "'\\''")
- 
-					if not os.path.exists(cover_path):
-						if len(os.listdir(cover_dir)) > 10:
-							os.system("rm -rf %s"%cover_dir)
-						os.system("mkdir -p %s"%cover_dir)
-						#subprocess.run[("ffmpeg", "-i", "'%s'"%status["file"], "-an", "-vcodec", "copy", "temp.jpg")]
-						os.system("ffmpeg -i '%s' -an -vcodec copy %s 2>/dev/null"%(filename, cover_path))
+					cover_path = self.extract_cover(status)
 					self.notify(status, cover_path)
 
-					# fetch cover url from MusicBrainz
-					try:
-						result = musicbrainzngs.search_releases(query=status["album"], artist=status["albumartist"])
-						cover_url = "https://coverartarchive.org/release-group/%s/front"%result["release-list"][0]["release-group"]["id"]
-					except:
-						print("[ERROR] Fetch cover from MusicBrainz failed.")
-						cover_url = "captivate"
-					
-					print(status)
+					print("[LOG] Status:", status)
 					self.rpc.update(
-						large_image=cover_url,
+						large_image=self.fetch_cover_url(status, cover_path),
 						small_image="play-black",# if status["status"] == "playing" else "pause-black",
 						large_text=status["album"],
 						small_text=status["length"],
@@ -67,8 +55,6 @@ class RPC:
 						state="%s"%status["artist"],
 						start=time.time()-self.elapsed_time
 					)
-		except:
-			pass
 		finally:
 			self.rpc.close()
 			print("[OK] RPC closed.")
@@ -102,18 +88,59 @@ class RPC:
 		if not os.path.exists(cover_path):
 			cover_path = "$PWD/assets/captivate.jpg"	# $PWD is not a good practice
 		os.system("notify-send -i %s 'Title : %s\nArtist : %s\nAlbum : %s\nLength : %s'"%
-			(cover_path, status["title"], status["artist"], status["album"], status["length"]))
+			(cover_path, status["title"].replace("'", "'\\''"),
+						 status["artist"].replace("'", "'\\''"), 
+						 status["album"].replace("'", "'\\''"), status["length"]))
 
-	def fetch_cover_url(self, status):
-		query = "https://musicbrainz.org/ws/2/release/?query=artist:%s&release:%s&limit=1"%(status["albumartist"], status["album"])
-		# parse
-		return "https://coverartarchive.org/release-group/%s/front"%group_id
+	def extract_cover(self, status):
+		cover_dir = os.path.expanduser("~/.config/cmus/covers")
+		cover_path = "%s/%s.jpg"%(cover_dir, hash(status["album"].replace(" ", "")))
+		filename = status["file"].replace("'", "'\\''")
+		if not os.path.exists(cover_path):
+			if len(os.listdir(cover_dir)) > 10:
+				os.system("rm -rf %s"%cover_dir)
+			os.system("mkdir -p %s"%cover_dir)
+			#subprocess.run[("ffmpeg", "-i", "'%s'"%status["file"], "-an", "-vcodec", "copy", "temp.jpg")]
+			os.system("ffmpeg -i '%s' -an -vcodec copy %s 2>/dev/null"%(filename, cover_path))
+		return cover_path
+
+	def fetch_cover_url(self, status, cover_path):
+		if self.imgur == None: # from MusicBrainz
+			if cover_path in self.saved_imgs:
+				return self.saved_imgs[cover_path]
+			try:
+				result = musicbrainzngs.search_releases(query=status["album"], artist=status["albumartist"])
+				cover_url = "https://coverartarchive.org/release-group/%s/front"%result["release-list"][0]["release-group"]["id"]
+				self.saved_imgs[cover_path] = cover_url
+				print("[LOG] Cover URL:", cover_url)
+				print("[LOG] Search Result:", [item["artist-credit"][0]["name"] for item in result["release-list"]])
+				return cover_url
+			except:
+				print("[ERROR] Fetch cover from MusicBrainz failed.")
+		else:	# from Imgur
+			if cover_path in self.saved_imgs:
+				return self.saved_imgs[cover_path]
+			try:
+				result = self.imgur.upload_image(cover_path, title=status["album"])
+				self.saved_imgs[cover_path] = result.link
+				print("[LOG] Cover URL:", result.link)
+				return result.link
+			except:
+				print("[ERROR] Upload to Imgur failed.")
+		return "captivate"
 
 if __name__ == "__main__":
-	RPC("989349655831785523").start()
-	#result = musicbrainzngs.search_releases(query="μοναξιά", artist="nomico")
-	#for item in result["release-list"]:
-	#	print(item["artist-credit"][0]["name"])
+	rpc_id = imgur_id = ""
+	for arg in sys.argv:
+		arg = arg.split("=")
+		match arg[0]:
+			case "--rpc":
+				rpc_id = arg[1]
+			case "--id":
+				imgur_id = arg[1]
+	if rpc_id == "":
+		print("[ERROR] RPC Client ID needed.")
+	RPC(rpc_id, imgur_id).start()
 
 	# ==> todos:
 	# 1. jp2a visualizer
