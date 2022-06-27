@@ -12,27 +12,27 @@
 - For notifier:
 	- Extract from mp3 with `ffmpeg`
 	- temporarily stored in `~/.config/cmus/covers`(auto create if not exists). 
-	- removed when the above directory contains more than 10 jpeg files.
-	- (may be combined with the below method)
+	- removed when `cmrpc` exits.
 
 - For Discord Rich Presence Icon:
 	- Discord RPC can now display images via url
-	- fetched from [MusicBrainz](https://musicbrainz.org/) database (may not be found)
-	- (may use images from `ffmpeg` if discord support local images :( )
+	- Upload the above extracted covers to Imgur
+
+### Requirements
+- `ffmpeg`
+- `python 3.10` (match-case used) with below packages
+```bash
+	pip install pyimgur
+	pip install pypresence
+```
 
 ### Usage
-
-- Requirements
-	- `ffmpeg`
-	- `python 3.10` (match-case used) with below packages
-	```bash
-		pip install pypresence
-		pip install musicbrainzngs
-	```
-
 - run in background with cmus
 	```bash
 		/path/to/cmrpc 1>/dev/null & cmus
 	```
-
-
+- better usage
+	```bash
+		tmux new -d /path/to/cmrpc; cmus
+	```
+	- Since `cmrpc` does some clean-ups after cmus closed, if the terminal session exits right after cmus does, then the clean-ups will be terminated.

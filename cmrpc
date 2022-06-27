@@ -101,7 +101,7 @@ class RPC:
 
 	def notify(self, status, cover_path):
 		if not os.path.exists(cover_path):
-			cover_path = "$PWD/assets/captivate.jpg"	# $PWD is not a good practice
+			cover_path = os.path.dirname(__file__)+"/captivate.jpg"
 		os.system("notify-send -i %s 'Title : %s\nArtist : %s\nAlbum : %s\nLength : %s'"%
 			(cover_path, status["title"].replace("'", "'\\''"),
 						 status["artist"].replace("'", "'\\''"), 
