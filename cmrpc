@@ -2,25 +2,17 @@
 
 import os, sys, time, subprocess
 from pypresence import Presence
+import pyimgur
 
 import json
 def print_dict(data):
 	print(json.dumps(data, indent=4, sort_keys=True, ensure_ascii=False))
 
 class RPC:
-	def __init__(self, rpc_id, imgur_id):
+	def __init__(self, rpc_id, imgur_id, cover_dir):
+		self.cover_dir = os.path.expanduser(cover_dir)
+		self.imgur = pyimgur.Imgur(imgur_id)
 		self.rpc = Presence(rpc_id)
-		self.elapsed_time = 0
-		self.playing = False
-
-		# imgur url
-		self.imgur = None
-		if imgur_id != "":
-			import pyimgur
-			self.imgur = pyimgur.Imgur(imgur_id)
-		else:
-			import musicbrainzngs
-			musicbrainzngs.set_useragent("cmrpc", "0.1", "https://gitlab.com/saibakho/cmrpc")
 		self.saved_imgs = {}
 
 	def start(self):
@@ -33,39 +25,51 @@ class RPC:
 				time.sleep(1)
 		try:
 			cur_song = ""
+			status = {
+				"playing": False,
+				"elapsed_time": 0
+			}
 			self.rpc.connect()
 			print("[OK] RPC started.")
 
 			while True:
 				time.sleep(1)
-				status = self.get_status()
-				if not self.playing:
-					self.rpc.clear()
-					cur_song = ""
-					continue
+				try:
+					status = self.get_status()
+					if not status["playing"]:
+						self.rpc.clear()
+						cur_song = ""
+						continue
+				except:
+					print("[ERROR] No cmus server found. Exit.")
+					return
 				if cur_song != status["title"]:
 					cur_song = status["title"]
 
-					cover_path = self.extract_cover(status)
+					cover_hash, cover_path = self.extract_cover(status)
 					self.notify(status, cover_path)
-
-					print("[LOG] Status: ", end="")
+					print("[OK] Status: ", end="")
 					print_dict(status)
+
 					self.rpc.update(
-						large_image=self.fetch_cover_url(status, cover_path),
-						small_image="play-black",# if status["status"] == "playing" else "pause-black",
+						large_image=self.upload_cover(status, cover_hash),
+						small_image="play-black",
 						large_text=status["album"],
 						small_text=status["length"],
 						details="%s"%status["title"],
 						state="%s"%status["artist"],
-						start=time.time()-self.elapsed_time
+						start=time.time()-status["elapsed_time"]
 					)
 		finally:
 			self.rpc.close()
 			print("[OK] RPC closed.")
+			
+			os.system("rm -rf %s"%self.cover_dir)
+			print("[OK] Temp cover folder deleted.")
+
 			for _, img in self.saved_imgs.items():
 				img.delete()
-				print("[LOG] %s deleted."%img.link)
+				print("[OK] %s deleted."%img.link)
 			print("[OK] img from Imgur deleted.")
 		#	icons source:
 		#	https://www.flaticon.com/free-icon/pause_709691
@@ -77,10 +81,9 @@ class RPC:
 			params = line.split(" ")
 			if params == []:
 				continue
-
 			match params[0]:
 				case "status":
-					self.playing = params[1] == "playing"
+					ret["playing"] = params[1] == "playing"
 				case "file":
 					ret["file"] = " ".join(params[1:])
 				case "duration":
@@ -88,9 +91,12 @@ class RPC:
 					ret["length"] = "%s%02d : %02d"%("%02d : "%(
 						num/3600) if num > 3600 else "", (num/60)%60, num%60)
 				case "position":
-					self.elapsed_time = int(params[1])
+					ret["elapsed_time"] = int(params[1])
 				case "tag":
 					ret[params[1]] = " ".join(params[2:])
+					# failed when only one char (?)
+					if len(ret[params[1]]) < 2:
+						ret[params[1]] += " "
 		return ret
 
 	def notify(self, status, cover_path):
@@ -102,60 +108,33 @@ class RPC:
 						 status["album"].replace("'", "'\\''"), status["length"]))
 
 	def extract_cover(self, status):
-		cover_dir = os.path.expanduser("~/.config/cmus/covers")
-		cover_path = "%s/%s.jpg"%(cover_dir, hash(status["album"].replace(" ", "")))
+		cover_hash = hash(status["album"].replace(" ", ""))
+		cover_path = "%s/%s.jpg"%(self.cover_dir, cover_hash)
 		filename = status["file"].replace("'", "'\\''")
 		if not os.path.exists(cover_path):
-			if len(os.listdir(cover_dir)) > 10:
-				os.system("rm -rf %s"%cover_dir)
 			os.system("mkdir -p %s"%cover_dir)
-			#subprocess.run[("ffmpeg", "-i", "'%s'"%status["file"], "-an", "-vcodec", "copy", "temp.jpg")]
 			os.system("ffmpeg -i '%s' -an -vcodec copy %s 2>/dev/null"%(filename, cover_path))
-		return cover_path
+		return cover_hash, cover_path
 
-	def fetch_cover_url(self, status, cover_path):
-		if self.imgur == None: # from MusicBrainz
-			if cover_path in self.saved_imgs:
-				return self.saved_imgs[cover_path]
-			try:
-				result = musicbrainzngs.search_releases(query=status["album"], artist=status["albumartist"])
-				cover_url = "https://coverartarchive.org/release-group/%s/front"%result["release-list"][0]["release-group"]["id"]
-				self.saved_imgs[cover_path] = cover_url
-				print("[LOG] Cover URL:", cover_url)
-				print("[LOG] Search Result:", [item["artist-credit"][0]["name"] for item in result["release-list"]])
-				return cover_url
-			except:
-				print("[ERROR] Fetch cover from MusicBrainz failed.")
-		else:	# from Imgur
-			if cover_path in self.saved_imgs:
-				return self.saved_imgs[cover_path].link
-			try:
-				result = self.imgur.upload_image(cover_path, title=status["album"])
-				self.saved_imgs[cover_path] = result
-				print("[LOG] Cover URL:", result.link)
-				return result.link
-			except:
-				print("[ERROR] Upload to Imgur failed.")
+	def upload_cover(self, status, cover_hash):
+		if cover_hash in self.saved_imgs:
+			return self.saved_imgs[cover_hash].link
+		try:
+			cover_path = "%s/%s.jpg"%(self.cover_dir, cover_hash)
+			result = self.imgur.upload_image(cover_path, title=status["album"])
+			self.saved_imgs[cover_hash] = result
+			print("[OK] Cover URL:", result.link)
+			return result.link
+		except:
+			print("[ERROR] Upload to Imgur failed.")
 		return "captivate"
 
 if __name__ == "__main__":
-	rpc_id = imgur_id = ""
-	for arg in sys.argv:
-		arg = arg.split("=")
-		match arg[0]:
-			case "--rpc":
-				rpc_id = arg[1]
-			case "--id":
-				imgur_id = arg[1]
-	if rpc_id == "":
-		print("[ERROR] RPC Client ID needed.")
-	else:
-		RPC(rpc_id, imgur_id).start()
+	# you can use your own IDs
+	rpc_id = "989349655831785523"
+	imgur_id = "9208169c5394267"
+	cover_dir = "~/.config/cmus/covers"
+	RPC(rpc_id, imgur_id, cover_dir).start()
 
 	# ==> todos:
 	# 1. jp2a visualizer
-	# 2. button jump to MusicBrain album page
-
-	# ==> fixes
-	# 1. better search (filter with artist, track num, released year, etc)
-	# 2. replace ffmpeg with musicbrainzngs
