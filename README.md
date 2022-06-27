@@ -7,6 +7,8 @@
 - to-dos:
 	- jp2a visualizer
 
+![alt text](preview.png)
+
 ### About albumart
 
 - For notifier:
@@ -31,8 +33,8 @@
 	```bash
 		/path/to/cmrpc 1>/dev/null & cmus
 	```
-- better usage
+- `[updated]` better usage:
 	```bash
 		tmux new -d /path/to/cmrpc; cmus
 	```
-	- Since `cmrpc` does some clean-ups after cmus closed, if the terminal session exits right after cmus does, then the clean-ups will be terminated.
+	- Since `cmrpc` does some clean-ups after `cmus` closed, if the terminal session exits right after `cmus` does, then the clean-ups will be terminated.
