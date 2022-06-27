@@ -3,6 +3,10 @@
 import os, sys, time, subprocess
 from pypresence import Presence
 
+import json
+def print_dict(data):
+	print(json.dumps(data, indent=4, sort_keys=True, ensure_ascii=False))
+
 class RPC:
 	def __init__(self, rpc_id, imgur_id):
 		self.rpc = Presence(rpc_id)
@@ -45,7 +49,8 @@ class RPC:
 					cover_path = self.extract_cover(status)
 					self.notify(status, cover_path)
 
-					print("[LOG] Status:", status)
+					print("[LOG] Status: ", end="")
+					print_dict(status)
 					self.rpc.update(
 						large_image=self.fetch_cover_url(status, cover_path),
 						small_image="play-black",# if status["status"] == "playing" else "pause-black",
@@ -58,6 +63,10 @@ class RPC:
 		finally:
 			self.rpc.close()
 			print("[OK] RPC closed.")
+			for _, img in self.saved_imgs.items():
+				img.delete()
+				print("[LOG] %s deleted."%img.link)
+			print("[OK] img from Imgur deleted.")
 		#	icons source:
 		#	https://www.flaticon.com/free-icon/pause_709691
 		#	https://www.flaticon.com/free-icon/play-button_109197
@@ -65,7 +74,7 @@ class RPC:
 	def get_status(self):
 		ret = {}
 		for line in subprocess.check_output(["cmus-remote", "-C", "status"]).decode("utf-8").split("\n"):
-			params = line.split()
+			params = line.split(" ")
 			if params == []:
 				continue
 
@@ -119,10 +128,10 @@ class RPC:
 				print("[ERROR] Fetch cover from MusicBrainz failed.")
 		else:	# from Imgur
 			if cover_path in self.saved_imgs:
-				return self.saved_imgs[cover_path]
+				return self.saved_imgs[cover_path].link
 			try:
 				result = self.imgur.upload_image(cover_path, title=status["album"])
-				self.saved_imgs[cover_path] = result.link
+				self.saved_imgs[cover_path] = result
 				print("[LOG] Cover URL:", result.link)
 				return result.link
 			except:
@@ -140,7 +149,8 @@ if __name__ == "__main__":
 				imgur_id = arg[1]
 	if rpc_id == "":
 		print("[ERROR] RPC Client ID needed.")
-	RPC(rpc_id, imgur_id).start()
+	else:
+		RPC(rpc_id, imgur_id).start()
 
 	# ==> todos:
 	# 1. jp2a visualizer
