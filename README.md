@@ -13,7 +13,7 @@
 
 - For notifier:
 	- Extract from mp3 with `ffmpeg`
-	- temporarily stored in `~/.config/cmus/covers`(auto create if not exists). 
+	- temporarily stored in `path/of/cmrpc/covers`(auto create if not exists). 
 	- removed when `cmrpc` exits.
 
 - For Discord Rich Presence Icon:
@@ -21,7 +21,9 @@
 	- Upload the above extracted covers to Imgur
 
 ### Requirements
+- `tmux`
 - `ffmpeg`
+- `notify-send`
 - `python 3.10` (match-case used) with below packages
 ```bash
 	pip install pyimgur
@@ -35,6 +37,6 @@
 	```
 - `[updated]` better usage:
 	```bash
-		tmux new -d /path/to/cmrpc; cmus
+		tmux new -d /path/of/cmrpc; cmus
 	```
 	- Since `cmrpc` does some clean-ups after `cmus` closed, if the terminal session exits right after `cmus` does, then the clean-ups will be terminated.
