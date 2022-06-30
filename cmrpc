@@ -21,29 +21,21 @@ class RPC:
 				subprocess.check_output(["pgrep", "cmus"])
 				break
 			except:
-				print("[ERROR] No cmus server found. Exit.")
+				print("[ERROR] No cmus server found. Waiting...")
 				time.sleep(1)
 		try:
 			cur_song = ""
 			cur_album = ""
-			status = {
-				"playing": False,
-				"elapsed_time": 0
-			}
 			self.rpc.connect()
 			print("[OK] RPC started.")
 
 			while True:
 				time.sleep(1)
-				try:
-					status = self.get_status()
-					if not status["playing"]:
-						self.rpc.clear()
-						cur_song = ""
-						continue
-				except:
-					print("[ERROR] No cmus server found. Exit.")
-					return
+				status = self.get_status()
+				if not status["playing"]:
+					self.rpc.clear()
+					cur_song = ""
+					continue
 				if cur_song != status["title"] or cur_album != status["album"]:
 					cur_song = status["title"]
 					cur_album = status["album"]
@@ -78,8 +70,22 @@ class RPC:
 		#	https://www.flaticon.com/free-icon/play-button_109197
 
 	def get_status(self):
-		ret = {}
-		for line in subprocess.check_output(["cmus-remote", "-C", "status"]).decode("utf-8").split("\n"):
+		ret = {
+			"file": "NaN",
+			"playing": False,
+			"length": 0,
+			"elapsed_time": 0,
+
+			"title": "NaN",
+			"album": "NaN",
+			"artist": "NaN"
+		}
+		try:
+			result = subprocess.check_output(["cmus-remote", "-C", "status"])
+		except:
+			print("[ERROR] No cmus server found. Exit.")
+			exit()
+		for line in result.decode("utf-8").split("\n"):
 			params = line.split(" ")
 			if params == []:
 				continue
