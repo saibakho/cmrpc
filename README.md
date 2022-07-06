@@ -29,6 +29,10 @@
 	pip install pyimgur
 	pip install pypresence
 ```
+- `Font Awesome` enabled in your `dunstrc`.
+```bash
+	font = Noto Sans CJK TC Medium, Font Awesome 6 Free 12
+```
 
 ### Usage
 - run in background with cmus

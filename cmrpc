@@ -84,7 +84,7 @@ class RPC:
 			result = subprocess.check_output(["cmus-remote", "-C", "status"])
 		except:
 			print("[ERROR] No cmus server found. Exit.")
-			exit()
+			sys.exit()
 		for line in result.decode("utf-8").split("\n"):
 			params = line.split(" ")
 			if params == []:
@@ -133,7 +133,7 @@ class RPC:
 		cover_path = "%s/%s.jpg"%(self.cover_dir, cover_hash)
 		if not os.path.exists(cover_path):
 			cover_path = os.path.dirname(__file__)+"/captivate.jpg"
-		os.system("notify-send -i '%s' 'Title : %s\nArtist : %s\nAlbum : %s\nLength : %s'"%(
+		os.system("notify-send -a 'C* Music Player' -i '%s' '	%s' '	%s\n	%s\n 	%s'"%(
 			cover_path.replace("'", "'\\''"),
 			status["title"].replace("'", "'\\''"),
 			status["artist"].replace("'", "'\\''"), 
