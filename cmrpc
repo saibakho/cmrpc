@@ -8,6 +8,15 @@ import json
 def print_dict(data):
 	print(json.dumps(data, indent=4, sort_keys=True, ensure_ascii=False))
 
+def wait(callback=None, args=(), err_msg=""):
+	while True:
+		try:
+			callback(*args)
+			break
+		except:
+			print(err_msg)
+			time.sleep(1)
+
 class RPC:
 	def __init__(self, rpc_id, imgur_id):
 		self.cover_dir = os.path.dirname(__file__)+"/covers"
@@ -16,17 +25,13 @@ class RPC:
 		self.saved_imgs = {}
 
 	def start(self):
-		while True:
-			try:
-				subprocess.check_output(["pgrep", "cmus"])
-				break
-			except:
-				print("[ERROR] No cmus server found. Waiting...")
-				time.sleep(1)
+		wait(callback=subprocess.check_output, args=(["pgrep", "cmus"],), 
+			 err_msg="[ERROR] No cmus process found. Waiting...")
 		try:
 			cur_song = ""
 			cur_album = ""
-			self.rpc.connect()
+			wait(callback=self.rpc.connect, 
+				 err_msg="[ERROR] No discord process found. Waiting...")
 			print("[OK] RPC started.")
 
 			while True:
