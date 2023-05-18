@@ -19,7 +19,7 @@ def wait(callback=None, args=(), err_msg=""):
 
 class RPC:
 	def __init__(self, rpc_id, imgur_id):
-		self.cover_dir = os.path.dirname(__file__)+"/covers"
+		self.cover_dir = "/tmp/cmrpc" #os.path.dirname(__file__)+"/covers"
 		self.imgur = pyimgur.Imgur(imgur_id)
 		self.rpc = Presence(rpc_id)
 		self.saved_imgs = {}
@@ -63,6 +63,7 @@ class RPC:
 			self.rpc.close()
 			print("[OK] RPC closed.")
 			
+			# Actually no need to remove if using /tmp/ (system automatically clears it when shutdown)
 			os.system("rm -rf '%s'"%self.cover_dir.replace("'", "'\\''"))
 			print("[OK] Temp cover folder deleted.")
 
